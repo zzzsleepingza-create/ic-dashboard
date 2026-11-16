@@ -1,0 +1,1789 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบเฝ้าระวังอุบัติเหตุเข็มทิ่มตำและสัมผัสสารคัดหลั่ง (IC Hospital Dashboard)</title>
+    
+    <!-- Google Fonts: Sarabun & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Sarabun', 'Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS (XLSX) for Excel Export -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Sarabun', 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        .duplicate-row-highlight {
+            background-color: #fef2f2 !important;
+            border-left: 4px solid #dc2626 !important;
+        }
+        .duplicate-row-highlight:hover {
+            background-color: #fee2e2 !important;
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased">
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between py-3 gap-3">
+                <!-- Logo & Title -->
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-600 to-emerald-700 flex items-center justify-center text-white shadow-md shrink-0">
+                        <i class="fa-solid fa-shield-virus text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg sm:text-xl font-bold text-slate-800 leading-tight">
+                            ระบบเฝ้าระวังอุบัติเหตุเข็มทิ่มตำและสัมผัสสารคัดหลั่ง
+                        </h1>
+                        <p class="text-xs text-slate-500">งานป้องกันและควบคุมการติดเชื้อในโรงพยาบาล (IC Surveillance Two-Way Sync)</p>
+                    </div>
+                </div>
+
+                <!-- Controls & Actions -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <!-- Fiscal Year Filter -->
+                    <div class="flex items-center bg-slate-100 rounded-lg px-2.5 py-1.5 border border-slate-200">
+                        <i class="fa-regular fa-calendar-check text-teal-700 mr-2 text-sm"></i>
+                        <label for="fiscalYearFilter" class="text-xs font-semibold text-slate-600 mr-1.5 whitespace-nowrap">ปีงบประมาณ:</label>
+                        <select id="fiscalYearFilter" onchange="handleFilterChange()" class="bg-transparent text-sm font-bold text-teal-800 focus:outline-none cursor-pointer">
+                            <option value="ALL">ทั้งหมด (ทุกปีงบฯ)</option>
+                        </select>
+                    </div>
+
+                    <!-- Google Sheets Setup Button -->
+                    <button onclick="openGoogleSheetModal()" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition shadow-sm">
+                        <i class="fa-brands fa-google-drive text-emerald-600"></i>
+                        <span>เชื่อมต่อ Google Sheet</span>
+                        <span id="gsStatusDot" class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" title="เชื่อมต่อ Google Sheet พร้อมใช้งาน"></span>
+                    </button>
+
+                    <!-- Export Excel Button -->
+                    <button onclick="exportToExcel()" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium bg-teal-600 text-white hover:bg-teal-700 transition shadow-sm">
+                        <i class="fa-solid fa-file-excel"></i>
+                        <span>Export Excel</span>
+                    </button>
+
+                    <!-- Add New Incident Button -->
+                    <button onclick="openFormModal()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-rose-600 text-white hover:bg-rose-700 transition shadow-sm">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>บันทึกอุบัติการณ์ใหม่</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Fiscal Year & Cloud Sync Info Banner -->
+        <div class="bg-gradient-to-r from-teal-800 to-teal-700 rounded-xl p-4 text-white shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-start sm:items-center gap-3">
+                <div class="p-2 bg-white/15 rounded-lg shrink-0">
+                    <i class="fa-solid fa-cloud text-teal-200 text-lg"></i>
+                </div>
+                <div>
+                    <div class="text-sm font-semibold flex flex-wrap items-center gap-2">
+                        <span>รอบปีงบประมาณไทย: <span id="currentFiscalBannerText" class="text-amber-300 underline">แสดงข้อมูลทุกปีงบประมาณ</span></span>
+                        <span id="syncStatusText" class="text-[11px] bg-black/25 px-2 py-0.5 rounded-full text-teal-100">กำลังเชื่อมต่อฐานข้อมูลกลาง...</span>
+                    </div>
+                    <div class="text-xs text-teal-100 mt-0.5">นับตั้งแต่วันที่ 1 ตุลาคม ถึง 30 กันยายน ของปีถัดไป (ข้อมูลซิงค์ตรงจาก Google Sheets กลาง)</div>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 text-xs shrink-0">
+                <button onclick="fetchFromGoogleSheets(true)" id="pullFromSheetBtn" class="px-3.5 py-2 bg-white text-teal-900 hover:bg-teal-50 rounded-lg font-bold transition flex items-center gap-1.5 shadow-sm">
+                    <i class="fa-solid fa-rotate"></i>
+                    <span>ดึงข้อมูลล่าสุดจาก Sheet</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- KPI Summary Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Total Incidents -->
+            <div class="bg-white rounded-xl p-5 border border-slate-200 shadow-sm flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">จำนวนอุบัติการณ์ทั้งหมด</p>
+                    <div class="flex items-baseline gap-2 mt-1">
+                        <h2 id="kpiTotal" class="text-3xl font-bold text-slate-800">0</h2>
+                        <span class="text-xs text-slate-500">ครั้ง</span>
+                    </div>
+                    <p id="kpiTotalSub" class="text-xs text-teal-600 mt-1 font-medium">ในรอบที่เลือก</p>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center text-xl">
+                    <i class="fa-solid fa-notes-medical"></i>
+                </div>
+            </div>
+
+            <!-- Repeat / Duplicate Staff Alert -->
+            <div class="bg-white rounded-xl p-5 border-2 border-red-200 shadow-sm flex items-center justify-between relative overflow-hidden">
+                <div class="relative z-10">
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-red-600 animate-ping"></span>
+                        <p class="text-xs font-bold text-red-600 uppercase tracking-wider">บุคลากรเกิดเหตุซ้ำเดิม</p>
+                    </div>
+                    <div class="flex items-baseline gap-2 mt-1">
+                        <h2 id="kpiDuplicatePeople" class="text-3xl font-bold text-red-600">0</h2>
+                        <span class="text-xs text-red-500 font-medium">ราย (<span id="kpiDuplicateCases">0</span> ครั้ง)</span>
+                    </div>
+                    <p class="text-xs text-red-500 mt-1">แจ้งเตือนสีแดงอัตโนมัติเมื่อชื่อซ้ำ</p>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-red-100 text-red-600 flex items-center justify-center text-xl relative z-10">
+                    <i class="fa-solid fa-user-injured"></i>
+                </div>
+            </div>
+
+            <!-- High Risk Incidents -->
+            <div class="bg-white rounded-xl p-5 border border-slate-200 shadow-sm flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">ความเสี่ยงระดับสูง (High)</p>
+                    <div class="flex items-baseline gap-2 mt-1">
+                        <h2 id="kpiHighRisk" class="text-3xl font-bold text-amber-600">0</h2>
+                        <span class="text-xs text-slate-500">ครั้ง</span>
+                    </div>
+                    <p id="kpiHighRiskPercent" class="text-xs text-slate-500 mt-1">คิดเป็น 0% ของทั้งหมด</p>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+            </div>
+
+            <!-- Top Incident Type -->
+            <div class="bg-white rounded-xl p-5 border border-slate-200 shadow-sm flex items-center justify-between">
+                <div class="min-w-0 pr-2">
+                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">ประเภทเหตุการณ์สูงสุด</p>
+                    <h2 id="kpiTopType" class="text-base font-bold text-slate-800 mt-1.5 truncate">-</h2>
+                    <p id="kpiTopTypeCount" class="text-xs text-indigo-600 mt-1 font-medium">0 ครั้ง (0%)</p>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl shrink-0">
+                    <i class="fa-solid fa-syringe"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Repeat Offenders Red Alert Box -->
+        <div id="repeatAlertBox" class="hidden bg-red-50 border-l-4 border-red-600 rounded-r-xl p-4 shadow-sm">
+            <div class="flex items-start gap-3">
+                <div class="text-red-600 mt-0.5">
+                    <i class="fa-solid fa-circle-exclamation text-xl"></i>
+                </div>
+                <div class="flex-1">
+                    <h3 class="text-sm font-bold text-red-800">แจ้งเตือนเฝ้าระวังพิเศษ: พบรายชื่อบุคลากรเกิดอุบัติเหตุซ้ำเดิมในระบบ</h3>
+                    <div id="repeatAlertList" class="mt-2 flex flex-wrap gap-2"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <!-- Monthly Trend (Fiscal Year Oct - Sep) -->
+            <div class="bg-white rounded-xl p-5 border border-slate-200 shadow-sm lg:col-span-2">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="text-base font-bold text-slate-800">แนวโน้มการเกิดอุบัติเหตุรายเดือน (ตามปีงบประมาณ ต.ค. - ก.ย.)</h3>
+                        <p class="text-xs text-slate-500">เปรียบเทียบจำนวนเหตุการณ์ในแต่ละเดือนของรอบปีงบประมาณ</p>
+                    </div>
+                </div>
+                <div class="h-64 relative">
+                    <canvas id="monthlyTrendChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Incident Type Distribution -->
+            <div class="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+                <div class="mb-4">
+                    <h3 class="text-base font-bold text-slate-800">สัดส่วนประเภทของเหตุการณ์</h3>
+                    <p class="text-xs text-slate-500">จำแนกตามลักษณะการสัมผัส/บาดเจ็บ</p>
+                </div>
+                <div class="h-64 relative flex items-center justify-center">
+                    <canvas id="incidentTypeChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Top Departments -->
+            <div class="bg-white rounded-xl p-5 border border-slate-200 shadow-sm lg:col-span-2">
+                <div class="mb-4">
+                    <h3 class="text-base font-bold text-slate-800">10 อันดับสถานที่/หอผู้ป่วยที่เกิดเหตุสูงสุด</h3>
+                    <p class="text-xs text-slate-500">หน่วยงานที่มีรายงานอุบัติการณ์เข็มทิ่มตำและสัมผัสสารคัดหลั่งมากที่สุด</p>
+                </div>
+                <div class="h-64 relative">
+                    <canvas id="locationChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Risk Level & Shift Breakdown -->
+            <div class="bg-white rounded-xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
+                <div>
+                    <h3 class="text-base font-bold text-slate-800">ระดับความเสี่ยง & เวรที่เกิดเหตุ</h3>
+                    <p class="text-xs text-slate-500 mb-3">สัดส่วนความรุนแรงและช่วงเวลาปฏิบัติงาน</p>
+                </div>
+                <div class="h-44 relative">
+                    <canvas id="riskChart"></canvas>
+                </div>
+                <div id="shiftSummaryBar" class="mt-4 pt-3 border-t border-slate-100 grid grid-cols-3 gap-2 text-center">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Table Section -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                        <span>ทะเบียนบันทึกอุบัติเหตุเข็มทิ่มตำและสัมผัสสารคัดหลั่ง</span>
+                        <span id="tableCountBadge" class="px-2.5 py-0.5 text-xs font-semibold bg-teal-100 text-teal-800 rounded-full">0 รายการ</span>
+                    </h3>
+                    <p class="text-xs text-slate-500 mt-0.5">
+                        * แถวที่มีพื้นหลัง <span class="text-red-600 font-bold bg-red-50 px-1 rounded border border-red-200">สีแดง</span> หมายถึงบุคลากรที่เคยมีประวัติเกิดอุบัติเหตุซ้ำเดิมในระบบ
+                    </p>
+                </div>
+
+                <!-- Search & Filters -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="searchInput" oninput="renderTable()" placeholder="ค้นหาชื่อ, สถานที่, สถานการณ์..." class="pl-8 pr-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 w-56">
+                    </div>
+
+                    <select id="riskFilter" onchange="renderTable()" class="px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
+                        <option value="ALL">ทุกระดับความเสี่ยง</option>
+                        <option value="สูง">ความเสี่ยง: สูง</option>
+                        <option value="ปานกลาง">ความเสี่ยง: ปานกลาง</option>
+                        <option value="ต่ำ">ความเสี่ยง: ต่ำ</option>
+                    </select>
+
+                    <label class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg cursor-pointer select-none">
+                        <input type="checkbox" id="onlyRepeatFilter" onchange="renderTable()" class="rounded text-red-600 focus:ring-red-500">
+                        <span>เฉพาะชื่อซ้ำเดิม</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Responsive Table -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-600 uppercase">
+                            <th class="py-3 px-4 whitespace-nowrap">ปีงบฯ</th>
+                            <th class="py-3 px-4 whitespace-nowrap">วันที่ / เวร</th>
+                            <th class="py-3 px-4 whitespace-nowrap">ชื่อ-นามสกุลบุคลากร</th>
+                            <th class="py-3 px-4 whitespace-nowrap">ตำแหน่ง</th>
+                            <th class="py-3 px-4 whitespace-nowrap">ประเภทเหตุการณ์</th>
+                            <th class="py-3 px-4">สถานที่เกิดเหตุ</th>
+                            <th class="py-3 px-4">สถานการณ์โดยย่อ</th>
+                            <th class="py-3 px-4 text-center whitespace-nowrap">ความเสี่ยง</th>
+                            <th class="py-3 px-4 text-center whitespace-nowrap">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="incidentTableBody" class="divide-y divide-slate-200 text-sm">
+                        <tr>
+                            <td colspan="9" class="py-10 text-center text-slate-400">
+                                <i class="fa-solid fa-spinner fa-spin text-2xl text-teal-600 mb-2 block"></i>
+                                กำลังโหลดข้อมูลจาก Google Sheets...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ===================================================================== -->
+    <!-- MODAL 1: ADD / EDIT INCIDENT FORM MODAL                               -->
+    <!-- ===================================================================== -->
+    <div id="formModal" class="fixed inset-0 z-40 hidden bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+        <div class="min-h-screen px-4 py-8 flex items-center justify-center">
+            <div class="bg-white rounded-2xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden">
+                <!-- Modal Header -->
+                <div class="bg-gradient-to-r from-teal-700 to-teal-600 px-6 py-4 flex items-center justify-between text-white">
+                    <div class="flex items-center gap-2.5">
+                        <i class="fa-solid fa-file-medical text-xl text-teal-200"></i>
+                        <h2 id="formModalTitle" class="text-lg font-bold">บันทึกข้อมูลอุบัติเหตุเข็มทิ่มตำ / สัมผัสสารคัดหลั่ง</h2>
+                    </div>
+                    <button onclick="closeFormModal()" class="text-white/80 hover:text-white p-1 rounded-lg transition">
+                        <i class="fa-solid fa-xmark text-xl"></i>
+                    </button>
+                </div>
+
+                <!-- Modal Body (Form) -->
+                <form id="incidentForm" onsubmit="handleFormSubmit(event)" class="p-6 space-y-5">
+                    <input type="hidden" id="editRecordId" value="">
+
+                    <!-- 1. ชื่อ-นามสกุลบุคลากร + ระบบตรวจจับชื่อซ้ำอัตโนมัติ -->
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">
+                            1. ชื่อ-นามสกุลบุคลากรที่เกิดเหตุ <span class="text-red-500">*</span>
+                        </label>
+                        <div class="relative">
+                            <input type="text" id="staffName" list="existingStaffList" oninput="checkDuplicateNameLive()" required
+                                placeholder="ระบุคำนำหน้า ชื่อ และนามสกุล เช่น พว.สมหญิง ใจดี"
+                                class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 transition">
+                            <datalist id="existingStaffList"></datalist>
+                        </div>
+                        <!-- Real-time Duplicate Warning Box -->
+                        <div id="liveDuplicateWarning" class="hidden mt-2 p-3 bg-red-50 border border-red-300 rounded-xl flex items-start gap-2.5 text-red-700">
+                            <i class="fa-solid fa-triangle-exclamation text-red-600 mt-0.5 text-base animate-bounce"></i>
+                            <div class="text-xs">
+                                <span class="font-bold text-sm block text-red-800">⚠️ แจ้งเตือน: พบชื่อ-นามสกุลนี้เคยเกิดอุบัติเหตุในระบบแล้ว!</span>
+                                <span id="liveDuplicateDetail"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row: ประเภทเจ้าหน้าที่ & วันที่เกิดเหตุ & เวร -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <!-- ประเภทเจ้าหน้าที่ -->
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-1">
+                                2. ประเภทเจ้าหน้าที่ (ทุกตำแหน่ง) <span class="text-red-500">*</span>
+                            </label>
+                            <select id="staffRole" onchange="toggleOtherRole()" required class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500">
+                                <option value="">-- เลือกตำแหน่ง --</option>
+                                <optgroup label="สายวิชาชีพแพทย์และทันตกรรม">
+                                    <option value="แพทย์">แพทย์</option>
+                                    <option value="แพทย์ประจำบ้าน / แพทย์ใช้ทุน">แพทย์ประจำบ้าน / แพทย์ใช้ทุน</option>
+                                    <option value="ทันตแพทย์">ทันตแพทย์</option>
+                                    <option value="ผู้ช่วยทันตแพทย์">ผู้ช่วยทันตแพทย์</option>
+                                </optgroup>
+                                <optgroup label="สายการพยาบาล">
+                                    <option value="พยาบาลวิชาชีพ">พยาบาลวิชาชีพ</option>
+                                    <option value="พยาบาลเทคนิค">พยาบาลเทคนิค</option>
+                                    <option value="ผู้ช่วยพยาบาล (PN)">ผู้ช่วยพยาบาล (PN)</option>
+                                    <option value="ผู้ช่วยเหลือคนไข้ (NA)">ผู้ช่วยเหลือคนไข้ (NA)</option>
+                                </optgroup>
+                                <optgroup label="สายสหวิชาชีพและสนับสนุนการแพทย์">
+                                    <option value="เภสัชกร">เภสัชกร</option>
+                                    <option value="เจ้าพนักงานเภสัชกรรม">เจ้าพนักงานเภสัชกรรม</option>
+                                    <option value="นักเทคนิคการแพทย์">นักเทคนิคการแพทย์</option>
+                                    <option value="เจ้าพนักงานวิทยาศาสตร์การแพทย์">เจ้าพนักงานวิทยาศาสตร์การแพทย์</option>
+                                    <option value="นักรังสีการแพทย์">นักรังสีการแพทย์</option>
+                                    <option value="นักกายภาพบำบัด">นักกายภาพบำบัด</option>
+                                    <option value="นักกิจกรรมบำบัด">นักกิจกรรมบำบัด</option>
+                                    <option value="นักโภชนาการ / โภชนากร">นักโภชนาการ / โภชนากร</option>
+                                    <option value="นักวิชาการสาธารณสุข">นักวิชาการสาธารณสุข</option>
+                                    <option value="เจ้าพนักงานเวชกิจฉุกเฉิน (EMT/Paramedic)">เจ้าพนักงานเวชกิจฉุกเฉิน (EMT/Paramedic)</option>
+                                    <option value="เจ้าหน้าที่จ่ายกลาง (CSSD)">เจ้าหน้าที่จ่ายกลาง (CSSD)</option>
+                                </optgroup>
+                                <optgroup label="สายสนับสนุนบริการและทั่วไป">
+                                    <option value="พนักงานเปล">พนักงานเปล</option>
+                                    <option value="พนักงานทำความสะอาด / แม่บ้าน">พนักงานทำความสะอาด / แม่บ้าน</option>
+                                    <option value="พนักงานซักฟอก">พนักงานซักฟอก</option>
+                                    <option value="พนักงานกำจัดขยะติดเชื้อ">พนักงานกำจัดขยะติดเชื้อ</option>
+                                    <option value="พนักงานขับรถพยาบาล">พนักงานขับรถพยาบาล</option>
+                                    <option value="เจ้าหน้าที่บริหาร / ธุรการ / เวชระเบียน">เจ้าหน้าที่บริหาร / ธุรการ / เวชระเบียน</option>
+                                    <option value="ช่างซ่อมบำรุง / วิศวกรชีวการแพทย์">ช่างซ่อมบำรุง / วิศวกรชีวการแพทย์</option>
+                                    <option value="เจ้าหน้าที่รักษาความปลอดภัย (รปภ.)">เจ้าหน้าที่รักษาความปลอดภัย (รปภ.)</option>
+                                </optgroup>
+                                <optgroup label="นักศึกษาฝึกปฏิบัติงาน">
+                                    <option value="นักศึกษาแพทย์">นักศึกษาแพทย์</option>
+                                    <option value="นักศึกษาพยาบาล">นักศึกษาพยาบาล</option>
+                                    <option value="นักศึกษาสหวิชาชีพอื่นๆ">นักศึกษาสหวิชาชีพอื่นๆ</option>
+                                </optgroup>
+                                <option value="อื่นๆ">อื่น ๆ (ระบุตำแหน่ง)</option>
+                            </select>
+                            <input type="text" id="staffRoleOther" placeholder="ระบุตำแหน่งอื่นๆ..." class="hidden mt-2 w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                        </div>
+
+                        <!-- วัน เดือน ปี ที่เกิดเหตุ -->
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-1">
+                                3. วัน เดือน ปี ที่เกิดเหตุ <span class="text-red-500">*</span>
+                            </label>
+                            <input type="date" id="incidentDate" onchange="updateFormFiscalPreview()" required
+                                class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                            <p id="formFiscalPreview" class="text-xs text-teal-700 font-semibold mt-1">
+                                ปีงบประมาณไทย: -
+                            </p>
+                        </div>
+
+                        <!-- เวรที่เกิดเหตุ -->
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-1">
+                                4. เวรที่เกิดเหตุ <span class="text-red-500">*</span>
+                            </label>
+                            <div class="grid grid-cols-3 gap-2">
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="shift" value="เช้า" class="peer sr-only" required checked>
+                                    <div class="text-center py-2.5 px-2 rounded-xl border border-slate-300 text-sm font-medium peer-checked:bg-amber-50 peer-checked:border-amber-500 peer-checked:text-amber-800 transition">
+                                        <i class="fa-solid fa-sun text-amber-500 mr-1"></i>เช้า
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="shift" value="บ่าย" class="peer sr-only">
+                                    <div class="text-center py-2.5 px-2 rounded-xl border border-slate-300 text-sm font-medium peer-checked:bg-orange-50 peer-checked:border-orange-500 peer-checked:text-orange-800 transition">
+                                        <i class="fa-solid fa-cloud-sun text-orange-500 mr-1"></i>บ่าย
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="shift" value="ดึก" class="peer sr-only">
+                                    <div class="text-center py-2.5 px-2 rounded-xl border border-slate-300 text-sm font-medium peer-checked:bg-indigo-50 peer-checked:border-indigo-500 peer-checked:text-indigo-800 transition">
+                                        <i class="fa-solid fa-moon text-indigo-500 mr-1"></i>ดึก
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ประเภทของเหตุการณ์ที่เกิด -->
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1.5">
+                            5. ประเภทของเหตุการณ์ที่เกิด <span class="text-red-500">*</span>
+                        </label>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <label class="flex items-center gap-2.5 p-3 border border-slate-300 rounded-xl cursor-pointer hover:bg-slate-50 transition has-[:checked]:border-teal-600 has-[:checked]:bg-teal-50/60">
+                                <input type="radio" name="incidentType" value="เข็มทิ่มตำ/ของมีคมบาด" onchange="toggleOtherIncidentType()" required class="text-teal-600 focus:ring-teal-500">
+                                <span class="text-sm font-medium">2.1 เข็มทิ่มตำ/ของมีคมบาด</span>
+                            </label>
+                            <label class="flex items-center gap-2.5 p-3 border border-slate-300 rounded-xl cursor-pointer hover:bg-slate-50 transition has-[:checked]:border-teal-600 has-[:checked]:bg-teal-50/60">
+                                <input type="radio" name="incidentType" value="เลือดหรือสารคัดหลั่งกระเด็นเข้าตา" onchange="toggleOtherIncidentType()" class="text-teal-600 focus:ring-teal-500">
+                                <span class="text-sm font-medium">2.2 เลือดหรือสารคัดหลั่งกระเด็นเข้าตา</span>
+                            </label>
+                            <label class="flex items-center gap-2.5 p-3 border border-slate-300 rounded-xl cursor-pointer hover:bg-slate-50 transition has-[:checked]:border-teal-600 has-[:checked]:bg-teal-50/60">
+                                <input type="radio" name="incidentType" value="เลือดหรือสารคัดหลั่งกระเด็นเข้าปาก" onchange="toggleOtherIncidentType()" class="text-teal-600 focus:ring-teal-500">
+                                <span class="text-sm font-medium">2.3 เลือดหรือสารคัดหลั่งกระเด็นเข้าปาก</span>
+                            </label>
+                            <label class="flex items-center gap-2.5 p-3 border border-slate-300 rounded-xl cursor-pointer hover:bg-slate-50 transition has-[:checked]:border-teal-600 has-[:checked]:bg-teal-50/60">
+                                <input type="radio" name="incidentType" value="อื่นๆ" id="radioIncidentOther" onchange="toggleOtherIncidentType()" class="text-teal-600 focus:ring-teal-500">
+                                <span class="text-sm font-medium">2.4 อื่น ๆ (ระบุรายละเอียด)</span>
+                            </label>
+                        </div>
+                        <input type="text" id="incidentTypeOtherText" placeholder="ระบุประเภทเหตุการณ์อื่นๆ เช่น สารคัดหลั่งสัมผัสผิวหนังที่มีบาดแผล..."
+                            class="hidden mt-2.5 w-full px-3.5 py-2.5 border border-teal-400 bg-teal-50/30 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                    </div>
+
+                    <!-- สถานที่เกิดเหตุ (ครบทั้ง 35 รายการ) -->
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">
+                            6. สถานที่เกิดเหตุ (หอผู้ป่วย / หน่วยงาน) <span class="text-red-500">*</span>
+                        </label>
+                        <select id="locationSelect" onchange="toggleOtherLocation()" required class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500">
+                            <option value="">-- เลือกสถานที่เกิดเหตุ (ทั้งหมด 35 รายการ) --</option>
+                            <option value="6.1 หอผู้ป่วยวิกฤตศัลยกรรม (SICU)">6.1 หอผู้ป่วยวิกฤตศัลยกรรม (SICU)</option>
+                            <option value="6.2 หอผู้ป่วยวิกฤตอายุรกรรม (MICU)">6.2 หอผู้ป่วยวิกฤตอายุรกรรม (MICU)</option>
+                            <option value="6.3 หอผู้ป่วยวิกฤตกุมารเวชกรรมและทารกแรกคลอด (NICU)">6.3 หอผู้ป่วยวิกฤตกุมารเวชกรรมและทารกแรกคลอด (NICU)</option>
+                            <option value="6.4 หอผู้ป่วยวิกฤตศัลยกรรมประสาทและสมอง (ICU Neuro)">6.4 หอผู้ป่วยวิกฤตศัลยกรรมประสาทและสมอง (ICU Neuro)</option>
+                            <option value="6.5 หอผู้ป่วยวิกฤตโรคหัวใจและหลอดเลือด (CCU)">6.5 หอผู้ป่วยวิกฤตโรคหัวใจและหลอดเลือด (CCU)</option>
+                            <option value="6.6 ห้องผ่าตัด (ห้องผ่าตัด)">6.6 ห้องผ่าตัด (ห้องผ่าตัด)</option>
+                            <option value="6.7 หอผู้ป่วยกึ่งวิกฤตอายุรกรรม (อย. 2)">6.7 หอผู้ป่วยกึ่งวิกฤตอายุรกรรม (อย. 2)</option>
+                            <option value="6.8 หอผู้ป่วยอายุรกรรมหญิง (อย. 3)">6.8 หอผู้ป่วยอายุรกรรมหญิง (อย. 3)</option>
+                            <option value="6.9 หอผู้ป่วยอายุรกรรมชาย (อย. 4)">6.9 หอผู้ป่วยอายุรกรรมชาย (อย. 4)</option>
+                            <option value="6.10 หอผู้ป่วยอายุรกรรมชาย (อย. 5)">6.10 หอผู้ป่วยอายุรกรรมชาย (อย. 5)</option>
+                            <option value="6.11 หอผู้ป่วยพิเศษอายุรกรรม (พิเศษ อย. 6-7)">6.11 หอผู้ป่วยพิเศษอายุรกรรม (พิเศษ อย. 6-7)</option>
+                            <option value="6.12 หอผู้ป่วยกึ่งวิกฤตศัลยกรรม (Trauma ward)">6.12 หอผู้ป่วยกึ่งวิกฤตศัลยกรรม (Trauma ward)</option>
+                            <option value="6.13 หอผู้ป่วยศัลยกรรมชาย (ศช)">6.13 หอผู้ป่วยศัลยกรรมชาย (ศช)</option>
+                            <option value="6.14 หอผู้ป่วยศัลยกรรมหญิง (ศญ)">6.14 หอผู้ป่วยศัลยกรรมหญิง (ศญ)</option>
+                            <option value="6.15 หอผู้ป่วยศัลยกรรมระบบทางเดินปัสสาวะ (วนส. 3)">6.15 หอผู้ป่วยศัลยกรรมระบบทางเดินปัสสาวะ (วนส. 3)</option>
+                            <option value="6.16 หอผู้ป่วยนรีเวช">6.16 หอผู้ป่วยนรีเวช</option>
+                            <option value="6.17 หอผู้ป่วยห้องคลอด">6.17 หอผู้ป่วยห้องคลอด</option>
+                            <option value="6.18 หอผู้ป่วยหลังคลอด">6.18 หอผู้ป่วยหลังคลอด</option>
+                            <option value="6.19 หอผู้ป่วยเด็ก">6.19 หอผู้ป่วยเด็ก</option>
+                            <option value="6.20 หอผู้ป่วยทารกป่วย">6.20 หอผู้ป่วยทารกป่วย</option>
+                            <option value="6.21 หอผู้ป่วยออร์โธปิดิกส์ชาย">6.21 หอผู้ป่วยออร์โธปิดิกส์ชาย</option>
+                            <option value="6.22 หอผู้ป่วยออร์โธปิดิกส์หญิง">6.22 หอผู้ป่วยออร์โธปิดิกส์หญิง</option>
+                            <option value="6.23 หอผู้ป่วยโสต ศอ นาสิก จักษุ (วนส. 4)">6.23 หอผู้ป่วยโสต ศอ นาสิก จักษุ (วนส. 4)</option>
+                            <option value="6.24 หอผู้ป่วยจิตเวช (วนส. 5)">6.24 หอผู้ป่วยจิตเวช (วนส. 5)</option>
+                            <option value="6.25 หอผู้ป่วยเคมีบำบัด">6.25 หอผู้ป่วยเคมีบำบัด</option>
+                            <option value="6.26 หน่วยไตเทียม">6.26 หน่วยไตเทียม</option>
+                            <option value="6.27 หน่วยตรวจสวนหัวใจฯ (Cath Lab)">6.27 หน่วยตรวจสวนหัวใจฯ (Cath Lab)</option>
+                            <option value="6.28 หน่วยส่องกล้อง">6.28 หน่วยส่องกล้อง</option>
+                            <option value="6.29 หอผู้ป่วยชีวภิบาล">6.29 หอผู้ป่วยชีวภิบาล</option>
+                            <option value="6.30 หอผู้ป่วยโรคติดเชื้อ (Cohort)">6.30 หอผู้ป่วยโรคติดเชื้อ (Cohort)</option>
+                            <option value="6.31 หอผู้ป่วยพิเศษนันทรัตนาคาร">6.31 หอผู้ป่วยพิเศษนันทรัตนาคาร</option>
+                            <option value="6.32 แผนกผู้ป่วยนอก">6.32 แผนกผู้ป่วยนอก</option>
+                            <option value="6.33 ห้องฉุกเฉิน">6.33 ห้องฉุกเฉิน</option>
+                            <option value="6.34 หน่วยปฐมภูมิ">6.34 หน่วยปฐมภูมิ</option>
+                            <option value="6.35 อื่นๆ">6.35 อื่น ๆ (ระบุสถานที่)</option>
+                        </select>
+                        <input type="text" id="locationOtherText" placeholder="ระบุสถานที่เกิดเหตุอื่นๆ เช่น ห้องชันสูตร, งานจ่ายกลาง, รถพยาบาล..."
+                            class="hidden mt-2.5 w-full px-3.5 py-2.5 border border-teal-400 bg-teal-50/30 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                    </div>
+
+                    <!-- สถานการณ์ที่เกิดเหตุ -->
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">
+                            7. สถานการณ์ที่เกิดเหตุ (รายละเอียดขั้นตอนขณะเกิดเหตุ) <span class="text-red-500">*</span>
+                        </label>
+                        <textarea id="scenario" rows="3" required
+                            placeholder="บรรยายลักษณะเหตุการณ์ เช่น ขณะสวมปลอกเข็มกลับคืนหลังเจาะเลือดผู้ป่วย, ขณะทิ้งเข็มลงกล่องทิ้งของมีคมที่เต็ม, ขณะดูดเสมหะผู้ป่วย..."
+                            class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"></textarea>
+                    </div>
+
+                    <!-- ระดับความเสี่ยงของเหตุการณ์ที่เกิด -->
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1.5">
+                            8. ระดับความเสี่ยงของเหตุการณ์ที่เกิด <span class="text-red-500">*</span>
+                        </label>
+                        <div class="grid grid-cols-3 gap-3">
+                            <label class="cursor-pointer">
+                                <input type="radio" name="riskLevel" value="ต่ำ" class="peer sr-only" required>
+                                <div class="p-3 rounded-xl border-2 border-slate-200 text-center peer-checked:border-emerald-500 peer-checked:bg-emerald-50 transition">
+                                    <span class="inline-block w-3 h-3 rounded-full bg-emerald-500 mb-1"></span>
+                                    <div class="text-sm font-bold text-emerald-800">ต่ำ (Low)</div>
+                                    <div class="text-[11px] text-slate-500">สัมผัสผิวหนังปกติ/เข็มสะอาด</div>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="riskLevel" value="ปานกลาง" class="peer sr-only">
+                                <div class="p-3 rounded-xl border-2 border-slate-200 text-center peer-checked:border-amber-500 peer-checked:bg-amber-50 transition">
+                                    <span class="inline-block w-3 h-3 rounded-full bg-amber-500 mb-1"></span>
+                                    <div class="text-sm font-bold text-amber-800">ปานกลาง (Medium)</div>
+                                    <div class="text-[11px] text-slate-500">เข็มตำตื้น/กระเด็นเข้าเยื่อบุ</div>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="riskLevel" value="สูง" class="peer sr-only">
+                                <div class="p-3 rounded-xl border-2 border-slate-200 text-center peer-checked:border-red-600 peer-checked:bg-red-50 transition">
+                                    <span class="inline-block w-3 h-3 rounded-full bg-red-600 mb-1"></span>
+                                    <div class="text-sm font-bold text-red-800">สูง (High)</div>
+                                    <div class="text-[11px] text-slate-500">เข็มกลวงมีเลือด/ผู้ป่วยติดเชื้อ</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Form Buttons -->
+                    <div class="pt-4 border-t border-slate-200 flex items-center justify-end gap-3">
+                        <button type="button" onclick="closeFormModal()" class="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition">
+                            ยกเลิก
+                        </button>
+                        <button type="submit" id="submitFormBtn" class="px-6 py-2.5 rounded-xl text-sm font-bold bg-teal-600 text-white hover:bg-teal-700 shadow-md transition flex items-center gap-2">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            <span>บันทึกข้อมูลลง Google Sheet</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- MODAL 2: GOOGLE SHEETS INTEGRATION & APPS SCRIPT CODE MODAL           -->
+    <!-- ===================================================================== -->
+    <div id="googleSheetModal" class="fixed inset-0 z-40 hidden bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+        <div class="min-h-screen px-4 py-8 flex items-center justify-center">
+            <div class="bg-white rounded-2xl max-w-4xl w-full shadow-2xl border border-slate-200 overflow-hidden">
+                <!-- Header -->
+                <div class="bg-gradient-to-r from-emerald-700 to-teal-700 px-6 py-4 flex items-center justify-between text-white">
+                    <div class="flex items-center gap-2.5">
+                        <i class="fa-brands fa-google-drive text-xl text-emerald-200"></i>
+                        <h2 class="text-lg font-bold">ตั้งค่า Google Sheets Two-Way Sync (ดึงและบันทึกข้อมูลอัตโนมัติ)</h2>
+                    </div>
+                    <button onclick="closeGoogleSheetModal()" class="text-white/80 hover:text-white p-1 rounded-lg">
+                        <i class="fa-solid fa-xmark text-xl"></i>
+                    </button>
+                </div>
+
+                <div class="p-6 space-y-5 max-h-[82vh] overflow-y-auto">
+                    <!-- Web App URL Input -->
+                    <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                        <label class="block text-sm font-bold text-emerald-900 mb-1">
+                            Google Apps Script Web App URL (ตั้งค่าเริ่มต้นไว้ให้แล้ว):
+                        </label>
+                        <div class="flex flex-col sm:flex-row gap-2">
+                            <input type="url" id="gsWebAppUrl" placeholder="https://script.google.com/macros/s/.../exec"
+                                class="flex-1 px-3.5 py-2 border border-emerald-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600">
+                            <button onclick="saveGoogleSheetUrl()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg transition whitespace-nowrap">
+                                <i class="fa-solid fa-check mr-1"></i> บันทึก URL
+                            </button>
+                            <button onclick="resetDefaultGoogleSheetUrl()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-lg transition whitespace-nowrap" title="คืนค่าลิงก์เริ่มต้น">
+                                คืนค่าเริ่มต้น
+                            </button>
+                        </div>
+                        <p class="text-xs text-emerald-700 mt-2">
+                            * ระบบใช้ลิงก์เริ่มต้นของคุณโดยอัตโนมัติ ทำให้ทุกคนที่เปิดไฟล์ HTML นี้ดึงข้อมูลจาก Google Sheets ไฟล์เดียวกันได้ทันที
+                        </p>
+                    </div>
+
+                    <!-- Step-by-step Guide -->
+                    <div class="space-y-2 text-sm text-slate-700">
+                        <h3 class="font-bold text-slate-900 text-base">วิธีอัปเดตโค้ดใน Google Apps Script เพื่อให้ดึงข้อมูลกลับได้ (ทำครั้งเดียว):</h3>
+                        <ol class="list-decimal list-inside space-y-1.5 text-xs sm:text-sm bg-slate-50 p-4 rounded-xl border border-slate-200">
+                            <li>เปิดไฟล์ <strong>Google Sheets</strong> ของคุณ &rarr; ไปที่ <strong>ส่วนขยาย (Extensions) &gt; Apps Script</strong></li>
+                            <li>กดปุ่ม <strong>"คัดลอกโค้ด"</strong> ด้านล่างนี้ แล้วนำไปวางทับโค้ดเก่าทั้งหมดใน Apps Script จากนั้นกด <strong>บันทึก (Save)</strong></li>
+                            <li>กดปุ่ม <strong>การทำให้ใช้งานได้ (Deploy) &gt; จัดการการทำให้ใช้งานได้ (Manage deployments)</strong></li>
+                            <li>คลิกไอคอน <strong>ดินสอ (Edit)</strong> มุมขวาบน &rarr; ตรงช่องเวอร์ชันให้เลือก <strong>"เวอร์ชันใหม่ (New version)"</strong> &rarr; กด <strong>ทำให้ใช้งานได้ (Deploy)</strong> (จะได้ URL เดิม ไม่ต้องเปลี่ยนลิงก์)</li>
+                        </ol>
+                    </div>
+
+                    <!-- Apps Script Code Block -->
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="text-xs font-bold text-slate-600 uppercase">โค้ด Google Apps Script ฉบับสมบูรณ์ (รองรับ doGet ดึงข้อมูล + doPost เพิ่ม/แก้ไข/ลบ)</span>
+                            <button onclick="copyAppsScriptCode()" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition">
+                                <i class="fa-regular fa-copy"></i>
+                                <span>คัดลอกโค้ด</span>
+                            </button>
+                        </div>
+                        <textarea id="appsScriptCodeArea" readonly rows="13" class="w-full p-3.5 bg-slate-900 text-emerald-300 font-mono text-xs rounded-xl focus:outline-none leading-relaxed"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- MODAL 3: DELETE CONFIRMATION MODAL (NO NATIVE confirm())              -->
+    <!-- ===================================================================== -->
+    <div id="deleteConfirmModal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+            <div class="flex items-center gap-3 text-red-600 mb-3">
+                <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-trash-can text-lg"></i>
+                </div>
+                <h3 class="text-lg font-bold text-slate-900">ยืนยันการลบข้อมูลอุบัติการณ์</h3>
+            </div>
+            <p class="text-sm text-slate-600 mb-5">
+                คุณต้องการลบข้อมูลรายการนี้ทั้งในหน้าเว็บและใน <strong>Google Sheets</strong> ใช่หรือไม่? (การลบไม่สามารถย้อนกลับได้)
+            </p>
+            <div class="flex justify-end gap-2.5">
+                <button onclick="closeDeleteModal()" class="px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition">ยกเลิก</button>
+                <button onclick="confirmDeleteRecord()" id="confirmDeleteBtn" class="px-4 py-2 rounded-xl text-sm font-bold bg-red-600 text-white hover:bg-red-700 transition">ยืนยันการลบ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // =========================================================================
+        // 1. DEFAULT GOOGLE SHEETS URL & APPS SCRIPT TEMPLATE CODE
+        // =========================================================================
+        const DEFAULT_GS_URL = "https://script.google.com/macros/s/AKfycbzR0xUHsFUpU9LwRyIRmnlsu_GQkQ5Qi5u8RU0qPOwJYpzUsSmbU4eGpwkVBC96vV0T/exec";
+        const GS_URL_KEY = 'ic_needle_stick_gs_url_v2';
+        const CACHE_KEY = 'ic_needle_stick_cache_v2';
+
+        const GOOGLE_APPS_SCRIPT_TEMPLATE = `// โค้ด Google Apps Script รองรับทั้งดึงข้อมูล (doGet) และ เพิ่ม/แก้ไข/ลบข้อมูล (doPost)
+function doGet(e) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheets = ss.getSheets();
+    var allRecords = [];
+    
+    for (var s = 0; s < sheets.length; s++) {
+      var sheet = sheets[s];
+      var name = sheet.getName();
+      if (name.indexOf("ปีงบประมาณ_") === 0) {
+        var lastRow = sheet.getLastRow();
+        if (lastRow > 1) {
+          var data = sheet.getRange(2, 1, lastRow - 1, 11).getValues();
+          for (var i = 0; i < data.length; i++) {
+            var row = data[i];
+            if (!row[0] && !row[4]) continue;
+            var rawDate = row[2];
+            var dateStr = "";
+            if (rawDate instanceof Date) {
+              dateStr = Utilities.formatDate(rawDate, Session.getScriptTimeZone(), "yyyy-MM-dd");
+            } else {
+              dateStr = String(rawDate).trim();
+            }
+            allRecords.push({
+              id: String(row[0]),
+              date: dateStr,
+              shift: String(row[3]),
+              staffName: String(row[4]),
+              staffRole: String(row[6]),
+              incidentType: String(row[7]),
+              location: String(row[8]),
+              scenario: String(row[9]),
+              riskLevel: String(row[10])
+            });
+          }
+        }
+      }
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      records: allRecords
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error",
+      message: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doPost(e) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var payload = JSON.parse(e.postData.contents);
+    var action = payload.action || "create";
+
+    if (action === "delete" && payload.id) {
+      deleteRecordById(ss, payload.id);
+      recolorDuplicateRows(ss);
+      return ContentService.createTextOutput(JSON.stringify({ status: "deleted" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === "update" && payload.record && payload.record.id) {
+      deleteRecordById(ss, payload.record.id);
+      insertRecordToSheet(ss, payload.record);
+      recolorDuplicateRows(ss);
+      return ContentService.createTextOutput(JSON.stringify({ status: "updated" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var records = Array.isArray(payload.records) ? payload.records : [payload];
+    records.forEach(function(item) {
+      insertRecordToSheet(ss, item);
+    });
+    recolorDuplicateRows(ss);
+    
+    return ContentService.createTextOutput(JSON.stringify({ status: "success" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function insertRecordToSheet(ss, item) {
+  var fiscalYear = item.fiscalYear || getThaiFiscalYear(item.date);
+  var sheetName = "ปีงบประมาณ_" + fiscalYear;
+  var sheet = ss.getSheetByName(sheetName);
+  
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    var headers = [
+      "รหัสอ้างอิง", "ปีงบประมาณ", "วันที่เกิดเหตุ", "เวร", 
+      "ชื่อ-นามสกุลบุคลากร", "สถานะเกิดเหตุซ้ำ", "ประเภทเจ้าหน้าที่", 
+      "ประเภทเหตุการณ์", "สถานที่เกิดเหตุ", "สถานการณ์ที่เกิดเหตุ", 
+      "ระดับความเสี่ยง", "เวลาที่บันทึกข้อมูล"
+    ];
+    sheet.appendRow(headers);
+    sheet.getRange(1, 1, 1, headers.length)
+         .setFontWeight("bold")
+         .setBackground("#0f766e")
+         .setFontColor("#ffffff");
+    sheet.setFrozenRows(1);
+  }
+  
+  var rowData = [
+    item.id,
+    "ปีงบประมาณ " + fiscalYear,
+    item.date,
+    item.shift,
+    item.staffName,
+    "ปกติ (ครั้งแรก)",
+    item.staffRole,
+    item.incidentType,
+    item.location,
+    item.scenario,
+    item.riskLevel,
+    new Date().toLocaleString("th-TH")
+  ];
+  sheet.appendRow(rowData);
+}
+
+function deleteRecordById(ss, targetId) {
+  var sheets = ss.getSheets();
+  for (var s = 0; s < sheets.length; s++) {
+    var sheet = sheets[s];
+    if (sheet.getName().indexOf("ปีงบประมาณ_") === 0) {
+      var lastRow = sheet.getLastRow();
+      if (lastRow > 1) {
+        var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+        for (var i = ids.length - 1; i >= 0; i--) {
+          if (String(ids[i][0]) === String(targetId)) {
+            sheet.deleteRow(i + 2);
+          }
+        }
+      }
+    }
+  }
+}
+
+function recolorDuplicateRows(ss) {
+  var sheets = ss.getSheets();
+  var nameCount = {};
+  for (var s = 0; s < sheets.length; s++) {
+    var sheet = sheets[s];
+    if (sheet.getName().indexOf("ปีงบประมาณ_") === 0) {
+      var lastRow = sheet.getLastRow();
+      if (lastRow > 1) {
+        var names = sheet.getRange(2, 5, lastRow - 1, 1).getValues();
+        for (var i = 0; i < names.length; i++) {
+          var n = String(names[i][0]).trim().replace(/\\s+/g, " ");
+          if (n) nameCount[n] = (nameCount[n] || 0) + 1;
+        }
+      }
+    }
+  }
+  for (var s = 0; s < sheets.length; s++) {
+    var sheet = sheets[s];
+    if (sheet.getName().indexOf("ปีงบประมาณ_") === 0) {
+      var lastRow = sheet.getLastRow();
+      if (lastRow > 1) {
+        var names = sheet.getRange(2, 5, lastRow - 1, 1).getValues();
+        for (var i = 0; i < names.length; i++) {
+          var n = String(names[i][0]).trim().replace(/\\s+/g, " ");
+          var count = nameCount[n] || 1;
+          var rowRange = sheet.getRange(i + 2, 1, 1, 12);
+          var statusCell = sheet.getRange(i + 2, 6);
+          if (count > 1) {
+            rowRange.setBackground("#fee2e2").setFontColor("#991b1b");
+            sheet.getRange(i + 2, 5).setFontWeight("bold");
+            statusCell.setValue("⚠️ เกิดเหตุซ้ำเดิม (" + count + " ครั้ง)").setFontWeight("bold");
+          } else {
+            rowRange.setBackground(null).setFontColor("#000000");
+            sheet.getRange(i + 2, 5).setFontWeight("normal");
+            statusCell.setValue("ปกติ (ครั้งแรก)").setFontWeight("normal");
+          }
+        }
+      }
+    }
+  }
+}
+
+function getThaiFiscalYear(dateStr) {
+  var parts = dateStr.split("-");
+  var year = parseInt(parts[0], 10);
+  var month = parseInt(parts[1], 10);
+  var thaiYear = year + 543;
+  return (month >= 10) ? (thaiYear + 1) : thaiYear;
+}`;
+
+        // =========================================================================
+        // 2. STATE & HELPERS
+        // =========================================================================
+        let records = [];
+        let charts = {};
+        let pendingDeleteId = null;
+
+        function getActiveGsUrl() {
+            const customUrl = localStorage.getItem(GS_URL_KEY);
+            return (customUrl && customUrl.trim() !== '') ? customUrl.trim() : DEFAULT_GS_URL;
+        }
+
+        function getThaiFiscalYear(dateStr) {
+            if (!dateStr) return null;
+            const [y, m] = dateStr.split('-').map(Number);
+            const thaiYear = y + 543;
+            return m >= 10 ? thaiYear + 1 : thaiYear;
+        }
+
+        function formatThaiDate(dateStr) {
+            if (!dateStr) return '-';
+            const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+            const parts = dateStr.split('-');
+            if (parts.length !== 3) return dateStr;
+            const [y, m, d] = parts.map(Number);
+            return `${d} ${months[m - 1]} ${y + 543}`;
+        }
+
+        function normalizeName(name) {
+            return (name || '').trim().replace(/\s+/g, ' ');
+        }
+
+        function getStaffFrequencyMap(allRecords) {
+            const map = {};
+            allRecords.forEach(r => {
+                const key = normalizeName(r.staffName);
+                if (!key) return;
+                map[key] = (map[key] || 0) + 1;
+            });
+            return map;
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            const styles = {
+                success: 'bg-teal-800 text-white border-teal-600',
+                error: 'bg-red-600 text-white border-red-400',
+                warning: 'bg-amber-600 text-white border-amber-400'
+            };
+            const icons = {
+                success: 'fa-circle-check',
+                error: 'fa-circle-exclamation',
+                warning: 'fa-triangle-exclamation'
+            };
+
+            toast.className = `${styles[type] || styles.success} border px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 text-sm font-medium pointer-events-auto transition-all duration-300`;
+            toast.innerHTML = `<i class="fa-solid ${icons[type]} text-base"></i><span class="flex-1">${message}</span>`;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(20px)';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // =========================================================================
+        // 3. INITIALIZATION & TWO-WAY GOOGLE SHEETS SYNC (doGet / doPost)
+        // =========================================================================
+        window.onload = function() {
+            document.getElementById('appsScriptCodeArea').value = GOOGLE_APPS_SCRIPT_TEMPLATE;
+            
+            const activeUrl = getActiveGsUrl();
+            document.getElementById('gsWebAppUrl').value = activeUrl;
+            updateGsStatusIndicator(activeUrl);
+
+            // โหลดแคชชั่วคราวระหว่างรอ Google Sheet ตอบกลับ (ถ้ามี)
+            const cached = localStorage.getItem(CACHE_KEY);
+            if (cached) {
+                try {
+                    records = JSON.parse(cached);
+                    populateFiscalYearDropdown();
+                    refreshDashboard();
+                } catch (e) {}
+            }
+
+            // ดึงข้อมูลจริงจาก Google Sheets อัตโนมัติทันทีที่เปิดหน้าเว็บ
+            fetchFromGoogleSheets(false);
+        };
+
+        async function fetchFromGoogleSheets(isManual = false) {
+            const url = getActiveGsUrl();
+            const btn = document.getElementById('pullFromSheetBtn');
+            const statusText = document.getElementById('syncStatusText');
+
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>กำลังดึงข้อมูลจาก Sheet...</span>`;
+            }
+            if (statusText) {
+                statusText.textContent = 'กำลังดึงข้อมูลล่าสุดจาก Google Sheets...';
+            }
+
+            try {
+                // เพิ่ม timestamp ป้องกัน browser cache
+                const fetchUrl = `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`;
+                const response = await fetch(fetchUrl, { method: 'GET' });
+                const data = await response.json();
+
+                if (data && data.status === 'success' && Array.isArray(data.records)) {
+                    records = data.records;
+                    localStorage.setItem(CACHE_KEY, JSON.stringify(records));
+                    populateFiscalYearDropdown();
+                    refreshDashboard();
+
+                    const nowTime = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    if (statusText) {
+                        statusText.textContent = `ซิงค์ข้อมูลจาก Google Sheet ล่าสุดเวลา ${nowTime} น. (${records.length} รายการ)`;
+                    }
+                    if (isManual) {
+                        showToast(`ดึงข้อมูลล่าสุดจาก Google Sheet สำเร็จ (${records.length} รายการ)`, 'success');
+                    }
+                } else {
+                    throw new Error(data.message || 'รูปแบบข้อมูลไม่ถูกต้อง (กรุณาอัปเดตโค้ด Apps Script เวอร์ชันใหม่)');
+                }
+            } catch (err) {
+                console.error('Fetch error:', err);
+                if (statusText) {
+                    statusText.textContent = 'ไม่สามารถดึงข้อมูลอัตโนมัติได้ (กรุณาตรวจสอบการ Deploy Apps Script เวอร์ชันใหม่)';
+                }
+                if (records.length === 0) {
+                    renderTable();
+                }
+                if (isManual) {
+                    showToast('ดึงข้อมูลไม่สำเร็จ: กรุณาตรวจสอบว่าได้อัปเดตโค้ด Apps Script และ Deploy New Version แล้ว', 'error');
+                }
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = `<i class="fa-solid fa-rotate"></i><span>ดึงข้อมูลล่าสุดจาก Sheet</span>`;
+                }
+            }
+        }
+
+        function populateFiscalYearDropdown() {
+            const select = document.getElementById('fiscalYearFilter');
+            const currentVal = select.value;
+            const years = new Set();
+            records.forEach(r => {
+                const fy = getThaiFiscalYear(r.date);
+                if (fy) years.add(fy);
+            });
+            const todayStr = new Date().toISOString().split('T')[0];
+            years.add(getThaiFiscalYear(todayStr));
+
+            const sortedYears = Array.from(years).sort((a, b) => b - a);
+            select.innerHTML = `<option value="ALL">ทั้งหมด (ทุกปีงบประมาณ)</option>`;
+            sortedYears.forEach(y => {
+                const opt = document.createElement('option');
+                opt.value = y;
+                opt.textContent = `ปีงบประมาณ ${y} (ต.ค. ${y - 1} - ก.ย. ${y})`;
+                select.appendChild(opt);
+            });
+
+            if (Array.from(select.options).some(o => o.value === currentVal)) {
+                select.value = currentVal;
+            }
+        }
+
+        function updateStaffDatalist() {
+            const datalist = document.getElementById('existingStaffList');
+            const uniqueNames = Array.from(new Set(records.map(r => normalizeName(r.staffName))));
+            datalist.innerHTML = uniqueNames.map(name => `<option value="${name}">`).join('');
+        }
+
+        function handleFilterChange() {
+            refreshDashboard();
+        }
+
+        function getFilteredRecords() {
+            const fyFilter = document.getElementById('fiscalYearFilter').value;
+            if (fyFilter === 'ALL') return [...records];
+            return records.filter(r => String(getThaiFiscalYear(r.date)) === String(fyFilter));
+        }
+
+        // =========================================================================
+        // 4. DASHBOARD RENDERING (KPIs, ALERTS, CHARTS, TABLE)
+        // =========================================================================
+        function refreshDashboard() {
+            const fyFilter = document.getElementById('fiscalYearFilter').value;
+            const bannerText = document.getElementById('currentFiscalBannerText');
+            if (fyFilter === 'ALL') {
+                bannerText.textContent = 'แสดงข้อมูลทั้งหมดทุกปีงบประมาณ';
+            } else {
+                const y = parseInt(fyFilter, 10);
+                bannerText.textContent = `ปีงบประมาณ ${y} (1 ต.ค. ${y - 1} – 30 ก.ย. ${y})`;
+            }
+
+            const filtered = getFilteredRecords();
+            const globalFreqMap = getStaffFrequencyMap(records);
+
+            updateKPIs(filtered, globalFreqMap);
+            updateRepeatAlertBanner(filtered, globalFreqMap);
+            renderCharts(filtered);
+            renderTable();
+            updateStaffDatalist();
+        }
+
+        function updateKPIs(filtered, globalFreqMap) {
+            const total = filtered.length;
+            document.getElementById('kpiTotal').textContent = total.toLocaleString();
+
+            const repeatPeopleSet = new Set();
+            let repeatCasesCount = 0;
+            filtered.forEach(r => {
+                const key = normalizeName(r.staffName);
+                if (globalFreqMap[key] > 1) {
+                    repeatPeopleSet.add(key);
+                    repeatCasesCount++;
+                }
+            });
+            document.getElementById('kpiDuplicatePeople').textContent = repeatPeopleSet.size;
+            document.getElementById('kpiDuplicateCases').textContent = repeatCasesCount;
+
+            const highRiskCount = filtered.filter(r => r.riskLevel === 'สูง').length;
+            const highPercent = total > 0 ? Math.round((highRiskCount / total) * 100) : 0;
+            document.getElementById('kpiHighRisk').textContent = highRiskCount;
+            document.getElementById('kpiHighRiskPercent').textContent = `คิดเป็น ${highPercent}% ของเหตุการณ์ทั้งหมด`;
+
+            if (total === 0) {
+                document.getElementById('kpiTopType').textContent = '-';
+                document.getElementById('kpiTopTypeCount').textContent = '0 ครั้ง (0%)';
+            } else {
+                const typeCounts = {};
+                filtered.forEach(r => {
+                    const baseType = r.incidentType.startsWith('อื่นๆ') ? 'อื่นๆ' : r.incidentType;
+                    typeCounts[baseType] = (typeCounts[baseType] || 0) + 1;
+                });
+                const topEntry = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0];
+                const pct = Math.round((topEntry[1] / total) * 100);
+                document.getElementById('kpiTopType').textContent = topEntry[0];
+                document.getElementById('kpiTopType').title = topEntry[0];
+                document.getElementById('kpiTopTypeCount').textContent = `${topEntry[1]} ครั้ง (${pct}%)`;
+            }
+        }
+
+        function updateRepeatAlertBanner(filtered, globalFreqMap) {
+            const alertBox = document.getElementById('repeatAlertBox');
+            const alertList = document.getElementById('repeatAlertList');
+            
+            const repeatPeople = {};
+            filtered.forEach(r => {
+                const key = normalizeName(r.staffName);
+                if (globalFreqMap[key] > 1) {
+                    repeatPeople[key] = globalFreqMap[key];
+                }
+            });
+
+            const entries = Object.entries(repeatPeople).sort((a, b) => b[1] - a[1]);
+            if (entries.length === 0) {
+                alertBox.classList.add('hidden');
+                return;
+            }
+
+            alertBox.classList.remove('hidden');
+            alertList.innerHTML = entries.map(([name, totalCount]) => `
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-600 text-white shadow-sm">
+                    <i class="fa-solid fa-user-xmark"></i>
+                    <span>${name}</span>
+                    <span class="bg-white text-red-700 px-1.5 py-0.2 rounded-full text-[11px]">เกิดซ้ำรวม ${totalCount} ครั้ง</span>
+                </span>
+            `).join('');
+        }
+
+        function renderCharts(filtered) {
+            // 1. Monthly Trend Chart (Oct -> Sep)
+            const fiscalMonthLabels = ['ต.ค.', 'พ.ย.', 'ธ.ค.', 'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.'];
+            const fiscalMonthNumbers = [10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+            const monthlyData = fiscalMonthNumbers.map(m => {
+                return filtered.filter(r => r.date && parseInt(r.date.split('-')[1], 10) === m).length;
+            });
+
+            if (charts.monthly) charts.monthly.destroy();
+            charts.monthly = new Chart(document.getElementById('monthlyTrendChart'), {
+                type: 'line',
+                data: {
+                    labels: fiscalMonthLabels,
+                    datasets: [{
+                        label: 'จำนวนอุบัติการณ์ (ครั้ง)',
+                        data: monthlyData,
+                        borderColor: '#0d9488',
+                        backgroundColor: 'rgba(13, 148, 136, 0.12)',
+                        borderWidth: 3,
+                        pointBackgroundColor: '#0f766e',
+                        pointRadius: 4,
+                        fill: true,
+                        tension: 0.35
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } } }
+                }
+            });
+
+            // 2. Incident Type Doughnut Chart
+            const typeCategories = [
+                'เข็มทิ่มตำ/ของมีคมบาด',
+                'เลือดหรือสารคัดหลั่งกระเด็นเข้าตา',
+                'เลือดหรือสารคัดหลั่งกระเด็นเข้าปาก',
+                'อื่นๆ'
+            ];
+            const typeCounts = typeCategories.map(cat => {
+                if (cat === 'อื่นๆ') {
+                    return filtered.filter(r => r.incidentType && r.incidentType.startsWith('อื่นๆ')).length;
+                }
+                return filtered.filter(r => r.incidentType === cat).length;
+            });
+
+            if (charts.type) charts.type.destroy();
+            charts.type = new Chart(document.getElementById('incidentTypeChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['เข็มทิ่มตำ/ของมีคม', 'กระเด็นเข้าตา', 'กระเด็นเข้าปาก', 'อื่น ๆ'],
+                    datasets: [{
+                        data: typeCounts,
+                        backgroundColor: ['#e11d48', '#f59e0b', '#3b82f6', '#8b5cf6'],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 12, font: { family: 'Sarabun', size: 12 } } }
+                    }
+                }
+            });
+
+            // 3. Top 10 Locations Horizontal Bar Chart
+            const locMap = {};
+            filtered.forEach(r => {
+                if (!r.location) return;
+                const cleanLoc = r.location.replace(/^6\.\d+\s+/, '');
+                locMap[cleanLoc] = (locMap[cleanLoc] || 0) + 1;
+            });
+            const topLocs = Object.entries(locMap).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+            if (charts.location) charts.location.destroy();
+            charts.location = new Chart(document.getElementById('locationChart'), {
+                type: 'bar',
+                data: {
+                    labels: topLocs.map(x => x[0]),
+                    datasets: [{
+                        label: 'จำนวนครั้ง',
+                        data: topLocs.map(x => x[1]),
+                        backgroundColor: '#0284c7',
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { x: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } } }
+                }
+            });
+
+            // 4. Risk Level Bar Chart & Shift Summary
+            const riskLevels = ['ต่ำ', 'ปานกลาง', 'สูง'];
+            const riskCounts = riskLevels.map(lvl => filtered.filter(r => r.riskLevel === lvl).length);
+
+            if (charts.risk) charts.risk.destroy();
+            charts.risk = new Chart(document.getElementById('riskChart'), {
+                type: 'bar',
+                data: {
+                    labels: ['ต่ำ (Low)', 'ปานกลาง (Med)', 'สูง (High)'],
+                    datasets: [{
+                        data: riskCounts,
+                        backgroundColor: ['#10b981', '#f59e0b', '#dc2626'],
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } } }
+                }
+            });
+
+            const shifts = [
+                { name: 'เวรเช้า', key: 'เช้า', icon: 'fa-sun text-amber-500' },
+                { name: 'เวรบ่าย', key: 'บ่าย', icon: 'fa-cloud-sun text-orange-500' },
+                { name: 'เวรดึก', key: 'ดึก', icon: 'fa-moon text-indigo-500' }
+            ];
+            document.getElementById('shiftSummaryBar').innerHTML = shifts.map(s => {
+                const c = filtered.filter(r => r.shift === s.key).length;
+                return `
+                    <div class="bg-slate-50 rounded-lg p-1.5 border border-slate-100">
+                        <div class="text-[11px] text-slate-500"><i class="fa-solid ${s.icon} mr-1"></i>${s.name}</div>
+                        <div class="text-sm font-bold text-slate-800">${c} ครั้ง</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('incidentTableBody');
+            const filteredByFy = getFilteredRecords();
+            const globalFreqMap = getStaffFrequencyMap(records);
+
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+            const riskFilter = document.getElementById('riskFilter').value;
+            const onlyRepeat = document.getElementById('onlyRepeatFilter').checked;
+
+            const displayList = filteredByFy
+                .filter(r => {
+                    const isRepeat = globalFreqMap[normalizeName(r.staffName)] > 1;
+                    if (onlyRepeat && !isRepeat) return false;
+                    if (riskFilter !== 'ALL' && r.riskLevel !== riskFilter) return false;
+                    if (searchTerm) {
+                        const hay = `${r.staffName} ${r.staffRole} ${r.incidentType} ${r.location} ${r.scenario}`.toLowerCase();
+                        if (!hay.includes(searchTerm)) return false;
+                    }
+                    return true;
+                })
+                .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            document.getElementById('tableCountBadge').textContent = `${displayList.length} รายการ`;
+
+            if (displayList.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="9" class="py-10 text-center text-slate-400">
+                            <i class="fa-regular fa-folder-open text-3xl mb-2 block"></i>
+                            ไม่พบข้อมูลอุบัติการณ์ใน Google Sheets หรือตามเงื่อนไขที่เลือก
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = displayList.map(r => {
+                const fy = getThaiFiscalYear(r.date);
+                const nameKey = normalizeName(r.staffName);
+                const occurrenceCount = globalFreqMap[nameKey] || 1;
+                const isRepeat = occurrenceCount > 1;
+
+                const rowClass = isRepeat ? 'duplicate-row-highlight' : 'hover:bg-slate-50';
+                
+                let riskBadge = '';
+                if (r.riskLevel === 'สูง') {
+                    riskBadge = `<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-300">สูง</span>`;
+                } else if (r.riskLevel === 'ปานกลาง') {
+                    riskBadge = `<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">ปานกลาง</span>`;
+                } else {
+                    riskBadge = `<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">ต่ำ</span>`;
+                }
+
+                const shiftColors = {
+                    'เช้า': 'bg-amber-50 text-amber-700 border-amber-200',
+                    'บ่าย': 'bg-orange-50 text-orange-700 border-orange-200',
+                    'ดึก': 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                };
+
+                return `
+                    <tr class="${rowClass} transition">
+                        <td class="py-3 px-4 whitespace-nowrap font-bold text-teal-800 text-xs">
+                            ปีงบฯ ${fy || '-'}
+                        </td>
+                        <td class="py-3 px-4 whitespace-nowrap">
+                            <div class="font-medium text-slate-800">${formatThaiDate(r.date)}</div>
+                            <span class="inline-block mt-0.5 px-2 py-0.2 text-[11px] font-semibold rounded border ${shiftColors[r.shift] || ''}">เวร${r.shift}</span>
+                        </td>
+                        <td class="py-3 px-4 whitespace-nowrap">
+                            <div class="font-bold ${isRepeat ? 'text-red-700' : 'text-slate-900'}">${r.staffName}</div>
+                            ${isRepeat ? `
+                                <span class="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded text-[11px] font-bold bg-red-600 text-white shadow-xs">
+                                    <i class="fa-solid fa-triangle-exclamation"></i> เกิดเหตุซ้ำ (${occurrenceCount} ครั้ง)
+                                </span>
+                            ` : ''}
+                        </td>
+                        <td class="py-3 px-4 whitespace-nowrap text-xs text-slate-600">${r.staffRole}</td>
+                        <td class="py-3 px-4 text-xs font-semibold text-slate-800">${r.incidentType}</td>
+                        <td class="py-3 px-4 text-xs text-slate-700">${r.location}</td>
+                        <td class="py-3 px-4 text-xs text-slate-600 max-w-xs">
+                            <p class="line-clamp-2" title="${r.scenario}">${r.scenario}</p>
+                        </td>
+                        <td class="py-3 px-4 text-center whitespace-nowrap">${riskBadge}</td>
+                        <td class="py-3 px-4 text-center whitespace-nowrap">
+                            <div class="inline-flex items-center gap-1">
+                                <button onclick="editRecord('${r.id}')" class="p-1.5 text-slate-500 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition" title="แก้ไข">
+                                    <i class="fa-solid fa-pen-to-square"></i>
+                                </button>
+                                <button onclick="openDeleteModal('${r.id}')" class="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="ลบรายการ">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // =========================================================================
+        // 5. FORM MODAL HANDLERS & LIVE DUPLICATE CHECK
+        // =========================================================================
+        function openFormModal() {
+            document.getElementById('incidentForm').reset();
+            document.getElementById('editRecordId').value = '';
+            document.getElementById('formModalTitle').textContent = 'บันทึกข้อมูลอุบัติเหตุเข็มทิ่มตำ / สัมผัสสารคัดหลั่ง';
+            document.getElementById('liveDuplicateWarning').classList.add('hidden');
+            document.getElementById('staffName').classList.remove('border-red-500', 'bg-red-50/40');
+            document.getElementById('staffRoleOther').classList.add('hidden');
+            document.getElementById('incidentTypeOtherText').classList.add('hidden');
+            document.getElementById('locationOtherText').classList.add('hidden');
+
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('incidentDate').value = today;
+            updateFormFiscalPreview();
+
+            document.getElementById('formModal').classList.remove('hidden');
+        }
+
+        function closeFormModal() {
+            document.getElementById('formModal').classList.add('hidden');
+        }
+
+        function updateFormFiscalPreview() {
+            const dateVal = document.getElementById('incidentDate').value;
+            const fy = getThaiFiscalYear(dateVal);
+            document.getElementById('formFiscalPreview').textContent = fy 
+                ? `คำนวณอัตโนมัติ: ปีงบประมาณไทย ${fy} (ต.ค. ${fy - 1} - ก.ย. ${fy})`
+                : 'ปีงบประมาณไทย: -';
+        }
+
+        function checkDuplicateNameLive() {
+            const inputEl = document.getElementById('staffName');
+            const warningBox = document.getElementById('liveDuplicateWarning');
+            const detailEl = document.getElementById('liveDuplicateDetail');
+            const editId = document.getElementById('editRecordId').value;
+
+            const typedName = normalizeName(inputEl.value);
+            if (!typedName) {
+                warningBox.classList.add('hidden');
+                inputEl.classList.remove('border-red-500', 'bg-red-50/40');
+                return;
+            }
+
+            const matches = records.filter(r => normalizeName(r.staffName) === typedName && r.id !== editId);
+            if (matches.length > 0) {
+                warningBox.classList.remove('hidden');
+                inputEl.classList.add('border-red-500', 'bg-red-50/40');
+                const lastDates = matches.map(m => `${formatThaiDate(m.date)} (${m.incidentType})`).join(', ');
+                detailEl.textContent = `บุคลากรชื่อ "${typedName}" เคยมีประวัติรายงานอุบัติเหตุแล้ว ${matches.length} ครั้ง ได้แก่: ${lastDates}`;
+            } else {
+                warningBox.classList.add('hidden');
+                inputEl.classList.remove('border-red-500', 'bg-red-50/40');
+            }
+        }
+
+        function toggleOtherRole() {
+            const val = document.getElementById('staffRole').value;
+            const otherInput = document.getElementById('staffRoleOther');
+            if (val === 'อื่นๆ') {
+                otherInput.classList.remove('hidden');
+                otherInput.required = true;
+            } else {
+                otherInput.classList.add('hidden');
+                otherInput.required = false;
+            }
+        }
+
+        function toggleOtherIncidentType() {
+            const isOther = document.getElementById('radioIncidentOther').checked;
+            const otherInput = document.getElementById('incidentTypeOtherText');
+            if (isOther) {
+                otherInput.classList.remove('hidden');
+                otherInput.required = true;
+            } else {
+                otherInput.classList.add('hidden');
+                otherInput.required = false;
+            }
+        }
+
+        function toggleOtherLocation() {
+            const val = document.getElementById('locationSelect').value;
+            const otherInput = document.getElementById('locationOtherText');
+            if (val === '6.35 อื่นๆ') {
+                otherInput.classList.remove('hidden');
+                otherInput.required = true;
+            } else {
+                otherInput.classList.add('hidden');
+                otherInput.required = false;
+            }
+        }
+
+        async function handleFormSubmit(e) {
+            e.preventDefault();
+
+            const submitBtn = document.getElementById('submitFormBtn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>กำลังบันทึกลง Google Sheet...</span>`;
+
+            const editId = document.getElementById('editRecordId').value;
+            const staffName = normalizeName(document.getElementById('staffName').value);
+            
+            let staffRole = document.getElementById('staffRole').value;
+            if (staffRole === 'อื่นๆ') {
+                staffRole = `อื่นๆ: ${document.getElementById('staffRoleOther').value.trim()}`;
+            }
+
+            const date = document.getElementById('incidentDate').value;
+            const shift = document.querySelector('input[name="shift"]:checked').value;
+
+            let incidentType = document.querySelector('input[name="incidentType"]:checked').value;
+            if (incidentType === 'อื่นๆ') {
+                incidentType = `อื่นๆ: ${document.getElementById('incidentTypeOtherText').value.trim()}`;
+            }
+
+            let location = document.getElementById('locationSelect').value;
+            if (location === '6.35 อื่นๆ') {
+                location = `6.35 อื่นๆ: ${document.getElementById('locationOtherText').value.trim()}`;
+            }
+
+            const scenario = document.getElementById('scenario').value.trim();
+            const riskLevel = document.querySelector('input[name="riskLevel"]:checked').value;
+            const fiscalYear = getThaiFiscalYear(date);
+
+            const recordObj = {
+                id: editId || `INC-${fiscalYear}-${String(Date.now()).slice(-5)}`,
+                staffName,
+                staffRole,
+                date,
+                shift,
+                incidentType,
+                location,
+                scenario,
+                riskLevel,
+                fiscalYear
+            };
+
+            try {
+                const url = getActiveGsUrl();
+                const payload = editId 
+                    ? { action: 'update', record: recordObj }
+                    : { action: 'create', ...recordObj };
+
+                await fetch(url, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (editId) {
+                    const idx = records.findIndex(r => r.id === editId);
+                    if (idx !== -1) records[idx] = recordObj;
+                    showToast('อัปเดตข้อมูลลง Google Sheet เรียบร้อยแล้ว', 'success');
+                } else {
+                    records.unshift(recordObj);
+                    const count = records.filter(r => normalizeName(r.staffName) === staffName).length;
+                    if (count > 1) {
+                        showToast(`บันทึกสำเร็จ! ⚠️ แจ้งเตือน: "${staffName}" เกิดเหตุซ้ำเป็นครั้งที่ ${count}`, 'error');
+                    } else {
+                        showToast(`บันทึกข้อมูลเข้าชีต ปีงบประมาณ_${fiscalYear} เรียบร้อยแล้ว`, 'success');
+                    }
+                }
+
+                localStorage.setItem(CACHE_KEY, JSON.stringify(records));
+                populateFiscalYearDropdown();
+                closeFormModal();
+                refreshDashboard();
+
+                // ดึงข้อมูลยืนยันจาก Sheet อีกรอบหลังจาก 1.5 วินาที
+                setTimeout(() => fetchFromGoogleSheets(false), 1500);
+            } catch (err) {
+                showToast('เกิดข้อผิดพลาดในการส่งข้อมูลไป Google Sheets', 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i><span>บันทึกข้อมูลลง Google Sheet</span>`;
+            }
+        }
+
+        function editRecord(id) {
+            const r = records.find(item => item.id === id);
+            if (!r) return;
+
+            openFormModal();
+            document.getElementById('formModalTitle').textContent = 'แก้ไขข้อมูลอุบัติการณ์ (อัปเดตลง Google Sheet)';
+            document.getElementById('editRecordId').value = r.id;
+            document.getElementById('staffName').value = r.staffName;
+            document.getElementById('incidentDate').value = r.date;
+            updateFormFiscalPreview();
+
+            const roleSelect = document.getElementById('staffRole');
+            if (r.staffRole && r.staffRole.startsWith('อื่นๆ:')) {
+                roleSelect.value = 'อื่นๆ';
+                toggleOtherRole();
+                document.getElementById('staffRoleOther').value = r.staffRole.replace('อื่นๆ:', '').trim();
+            } else {
+                roleSelect.value = r.staffRole;
+            }
+
+            const shiftRadio = document.querySelector(`input[name="shift"][value="${r.shift}"]`);
+            if (shiftRadio) shiftRadio.checked = true;
+
+            if (r.incidentType && r.incidentType.startsWith('อื่นๆ:')) {
+                document.getElementById('radioIncidentOther').checked = true;
+                toggleOtherIncidentType();
+                document.getElementById('incidentTypeOtherText').value = r.incidentType.replace('อื่นๆ:', '').trim();
+            } else {
+                const typeRadio = document.querySelector(`input[name="incidentType"][value="${r.incidentType}"]`);
+                if (typeRadio) typeRadio.checked = true;
+            }
+
+            const locSelect = document.getElementById('locationSelect');
+            if (r.location && r.location.startsWith('6.35 อื่นๆ:')) {
+                locSelect.value = '6.35 อื่นๆ';
+                toggleOtherLocation();
+                document.getElementById('locationOtherText').value = r.location.replace('6.35 อื่นๆ:', '').trim();
+            } else {
+                locSelect.value = r.location;
+            }
+
+            document.getElementById('scenario').value = r.scenario;
+            const riskRadio = document.querySelector(`input[name="riskLevel"][value="${r.riskLevel}"]`);
+            if (riskRadio) riskRadio.checked = true;
+
+            checkDuplicateNameLive();
+        }
+
+        // =========================================================================
+        // 6. DELETE RECORD MODAL & SYNC
+        // =========================================================================
+        function openDeleteModal(id) {
+            pendingDeleteId = id;
+            document.getElementById('deleteConfirmModal').classList.remove('hidden');
+        }
+
+        function closeDeleteModal() {
+            pendingDeleteId = null;
+            document.getElementById('deleteConfirmModal').classList.add('hidden');
+        }
+
+        async function confirmDeleteRecord() {
+            if (!pendingDeleteId) return;
+            const idToDelete = pendingDeleteId;
+            const btn = document.getElementById('confirmDeleteBtn');
+            btn.disabled = true;
+            btn.textContent = 'กำลังลบ...';
+
+            try {
+                const url = getActiveGsUrl();
+                await fetch(url, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'delete', id: idToDelete })
+                });
+
+                records = records.filter(r => r.id !== idToDelete);
+                localStorage.setItem(CACHE_KEY, JSON.stringify(records));
+                refreshDashboard();
+                showToast('ลบข้อมูลออกจากหน้าเว็บและ Google Sheet เรียบร้อยแล้ว', 'warning');
+                setTimeout(() => fetchFromGoogleSheets(false), 1500);
+            } catch (err) {
+                showToast('เกิดข้อผิดพลาดในการลบข้อมูล', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'ยืนยันการลบ';
+                closeDeleteModal();
+            }
+        }
+
+        // =========================================================================
+        // 7. EXPORT TO EXCEL (SEPARATE SHEETS PER THAI FISCAL YEAR)
+        // =========================================================================
+        function exportToExcel() {
+            if (records.length === 0) {
+                showToast('ไม่มีข้อมูลสำหรับส่งออก Excel', 'warning');
+                return;
+            }
+
+            const wb = XLSX.utils.book_new();
+            const globalFreqMap = getStaffFrequencyMap(records);
+            const fyFilter = document.getElementById('fiscalYearFilter').value;
+
+            const groupedByFy = {};
+            const targetRecords = fyFilter === 'ALL' ? records : getFilteredRecords();
+
+            targetRecords.forEach(r => {
+                const fy = getThaiFiscalYear(r.date);
+                if (!groupedByFy[fy]) groupedByFy[fy] = [];
+                groupedByFy[fy].push(r);
+            });
+
+            const sortedYears = Object.keys(groupedByFy).sort((a, b) => a - b);
+
+            sortedYears.forEach(fy => {
+                const sheetRows = groupedByFy[fy]
+                    .sort((a, b) => new Date(a.date) - new Date(b.date))
+                    .map((r, index) => {
+                        const count = globalFreqMap[normalizeName(r.staffName)] || 1;
+                        return {
+                            'ลำดับ': index + 1,
+                            'รหัสอ้างอิง': r.id,
+                            'ปีงบประมาณไทย': `ปีงบประมาณ ${fy}`,
+                            'วันที่เกิดเหตุ': formatThaiDate(r.date),
+                            'วันที่ (ISO)': r.date,
+                            'เวรที่เกิดเหตุ': r.shift,
+                            'ชื่อ-นามสกุลบุคลากร': r.staffName,
+                            'สถานะเกิดเหตุซ้ำ': count > 1 ? `เกิดเหตุซ้ำเดิม (รวม ${count} ครั้ง)` : 'ปกติ (ครั้งแรก)',
+                            'ประเภทเจ้าหน้าที่': r.staffRole,
+                            'ประเภทเหตุการณ์': r.incidentType,
+                            'สถานที่เกิดเหตุ': r.location,
+                            'สถานการณ์ที่เกิดเหตุ': r.scenario,
+                            'ระดับความเสี่ยง': r.riskLevel
+                        };
+                    });
+
+                const ws = XLSX.utils.json_to_sheet(sheetRows);
+                ws['!cols'] = [
+                    { wch: 8 }, { wch: 16 }, { wch: 18 }, { wch: 16 }, { wch: 14 },
+                    { wch: 12 }, { wch: 26 }, { wch: 24 }, { wch: 24 }, { wch: 30 },
+                    { wch: 34 }, { wch: 45 }, { wch: 15 }
+                ];
+                XLSX.utils.book_append_sheet(wb, ws, `ปีงบประมาณ_${fy}`);
+            });
+
+            const fileName = fyFilter === 'ALL' 
+                ? `รายงานอุบัติเหตุเข็มทิ่มตำ_แยกปีงบประมาณไทย.xlsx`
+                : `รายงานอุบัติเหตุเข็มทิ่มตำ_ปีงบประมาณ_${fyFilter}.xlsx`;
+
+            XLSX.writeFile(wb, fileName);
+            showToast(`ดาวน์โหลดไฟล์ ${fileName} สำเร็จ!`, 'success');
+        }
+
+        // =========================================================================
+        // 8. GOOGLE SHEETS SETTINGS MODAL
+        // =========================================================================
+        function openGoogleSheetModal() {
+            document.getElementById('gsWebAppUrl').value = getActiveGsUrl();
+            document.getElementById('googleSheetModal').classList.remove('hidden');
+        }
+
+        function closeGoogleSheetModal() {
+            document.getElementById('googleSheetModal').classList.add('hidden');
+        }
+
+        function updateGsStatusIndicator(url) {
+            const dot = document.getElementById('gsStatusDot');
+            if (url && url.startsWith('https://script.google.com/')) {
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
+                dot.title = 'เชื่อมต่อ Google Sheet พร้อมใช้งาน';
+            } else {
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400';
+                dot.title = 'ลิงก์ไม่ถูกต้อง';
+            }
+        }
+
+        function saveGoogleSheetUrl() {
+            const url = document.getElementById('gsWebAppUrl').value.trim();
+            if (!url) {
+                localStorage.removeItem(GS_URL_KEY);
+                document.getElementById('gsWebAppUrl').value = DEFAULT_GS_URL;
+            } else {
+                localStorage.setItem(GS_URL_KEY, url);
+            }
+            const active = getActiveGsUrl();
+            updateGsStatusIndicator(active);
+            closeGoogleSheetModal();
+            showToast('บันทึก URL และกำลังดึงข้อมูลล่าสุด...', 'success');
+            fetchFromGoogleSheets(true);
+        }
+
+        function resetDefaultGoogleSheetUrl() {
+            localStorage.removeItem(GS_URL_KEY);
+            document.getElementById('gsWebAppUrl').value = DEFAULT_GS_URL;
+            updateGsStatusIndicator(DEFAULT_GS_URL);
+            showToast('คืนค่าลิงก์ Google Sheets เริ่มต้นเรียบร้อยแล้ว', 'success');
+            fetchFromGoogleSheets(true);
+        }
+
+        function copyAppsScriptCode() {
+            const textarea = document.getElementById('appsScriptCodeArea');
+            textarea.select();
+            document.execCommand('copy');
+            showToast('คัดลอกโค้ด Google Apps Script ลงคลิปบอร์ดแล้ว', 'success');
+        }
+    </script>
+</body>
+</html>
